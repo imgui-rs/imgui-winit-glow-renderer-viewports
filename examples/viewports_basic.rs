@@ -11,18 +11,18 @@ use glutin::{
 use glutin_winit::DisplayBuilder;
 use imgui::ConfigFlags;
 use imgui_winit_glow_renderer_viewports::Renderer;
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::HasWindowHandle;
 use winit::{
     dpi::LogicalSize,
     event::WindowEvent,
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::WindowAttributes,
 };
 
 fn main() {
     let event_loop = EventLoop::new().expect("Failed to create EventLoop");
 
-    let window_builder = WindowBuilder::new()
+    let window_attributes = WindowAttributes::default()
         .with_inner_size(LogicalSize::new(800.0, 600.0))
         .with_visible(true)
         .with_resizable(true)
@@ -30,7 +30,7 @@ fn main() {
 
     let template_builder = ConfigTemplateBuilder::new();
     let (window, gl_config) = DisplayBuilder::new()
-        .with_window_builder(Some(window_builder))
+        .with_window_attributes(Some(window_attributes))
         .build(&event_loop, template_builder, |mut configs| {
             configs.next().unwrap()
         })
@@ -38,7 +38,8 @@ fn main() {
 
     let window = window.unwrap();
 
-    let context_attribs = ContextAttributesBuilder::new().build(Some(window.raw_window_handle()));
+    let context_attribs =
+        ContextAttributesBuilder::new().build(Some(window.window_handle().unwrap().as_raw()));
     let context = unsafe {
         gl_config
             .display()
@@ -48,7 +49,7 @@ fn main() {
 
     let size = window.inner_size();
     let surface_attribs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-        window.raw_window_handle(),
+        window.window_handle().unwrap().as_raw(),
         NonZeroU32::new(size.width).unwrap(),
         NonZeroU32::new(size.height).unwrap(),
     );
@@ -85,6 +86,7 @@ fn main() {
 
     let mut last_frame = Instant::now();
 
+    #[allow(deprecated)]
     event_loop
         .run(move |event, window_target| {
             window_target.set_control_flow(ControlFlow::Poll);
@@ -134,6 +136,7 @@ fn main() {
                     renderer.prepare_render(&mut imgui, &window);
 
                     imgui.update_platform_windows();
+
                     renderer
                         .update_viewports(&mut imgui, window_target, &glow)
                         .expect("Failed to update viewports");

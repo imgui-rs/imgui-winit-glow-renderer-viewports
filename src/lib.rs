@@ -4,7 +4,6 @@ use std::{
     num::NonZeroU32,
     ptr::null_mut,
     rc::Rc,
-    slice,
 };
 
 use glow::HasContext;
@@ -19,15 +18,15 @@ use glutin::{
 };
 use glutin_winit::DisplayBuilder;
 use imgui::{BackendFlags, ConfigFlags, Id, Io, Key, MouseButton, ViewportFlags};
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use thiserror::Error;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, TouchPhase},
-    event_loop::EventLoopWindowTarget,
+    event_loop::ActiveEventLoop,
     keyboard::{Key as WinitKey, KeyLocation, NamedKey},
     platform::modifier_supplement::KeyEventExtModifierSupplement,
-    window::{CursorIcon, Window, WindowBuilder},
+    window::{CursorIcon, Window, WindowAttributes},
 };
 
 const VERTEX_SHADER: &str = include_str!("vertex_shader.glsl");
@@ -55,6 +54,9 @@ pub enum RendererError {
     MakeCurrentFailed,
     #[error("Failed to make swap buffers on surface")]
     SwapBuffersFailed,
+
+    #[error("Failed to get the window handle: {0}")]
+    NoWindowHandle(#[from] raw_window_handle::HandleError),
 }
 
 #[derive(Debug)]
@@ -349,7 +351,7 @@ impl Renderer {
 
         // there is no good way to handle viewports on wayland,
         // so we disable them
-        match main_window.raw_window_handle() {
+        match main_window.window_handle()?.as_raw() {
             RawWindowHandle::Wayland(_) => {}
             _ => {
                 io.backend_flags
@@ -587,10 +589,10 @@ impl Renderer {
         }
     }
 
-    pub fn update_viewports<T>(
+    pub fn update_viewports(
         &mut self,
         imgui: &mut imgui::Context,
-        window_target: &EventLoopWindowTarget<T>,
+        window_target: &ActiveEventLoop,
         glow: &glow::Context,
     ) -> Result<(), RendererError> {
         loop {
@@ -662,10 +664,10 @@ impl Renderer {
             let cursor = Self::to_winit_cursor(cursor);
 
             if self.last_cursor != cursor {
-                main_window.set_cursor_icon(cursor);
+                main_window.set_cursor(cursor);
 
                 for (_, _, _, wnd) in self.extra_windows.values() {
-                    wnd.set_cursor_icon(cursor);
+                    wnd.set_cursor(cursor);
                 }
 
                 self.last_cursor = cursor;
@@ -673,10 +675,10 @@ impl Renderer {
         }
     }
 
-    fn create_extra_window<T>(
+    fn create_extra_window(
         &mut self,
         viewport: &mut imgui::Viewport,
-        window_target: &EventLoopWindowTarget<T>,
+        window_target: &ActiveEventLoop,
         glow: &glow::Context,
     ) -> Result<
         (
@@ -687,7 +689,7 @@ impl Renderer {
         ),
         RendererError,
     > {
-        let window_builder = WindowBuilder::new()
+        let window_attributes = WindowAttributes::default()
             .with_position(PhysicalPosition::new(viewport.pos[0], viewport.pos[1]))
             .with_inner_size(PhysicalSize::new(viewport.size[0], viewport.size[1]))
             .with_visible(false)
@@ -695,13 +697,13 @@ impl Renderer {
             .with_decorations(!viewport.flags.contains(ViewportFlags::NO_DECORATION));
 
         let window = if let Some(glutin_config) = &self.glutin_config {
-            glutin_winit::finalize_window(window_target, window_builder, glutin_config)
+            glutin_winit::finalize_window(window_target, window_attributes, glutin_config)
                 .map_err(|_| RendererError::WindowCreationFailed)?
         } else {
             let template_builder = ConfigTemplateBuilder::new();
 
             let (window, cfg) = DisplayBuilder::new()
-                .with_window_builder(Some(window_builder))
+                .with_window_attributes(Some(window_attributes))
                 .build(window_target, template_builder, |mut configs| {
                     configs.next().unwrap()
                 })
@@ -715,7 +717,7 @@ impl Renderer {
         let glutin_config = self.glutin_config.as_ref().unwrap();
 
         let context_attribs =
-            ContextAttributesBuilder::new().build(Some(window.raw_window_handle()));
+            ContextAttributesBuilder::new().build(Some(window.window_handle()?.as_raw()));
         let context = unsafe {
             glutin_config
                 .display()
@@ -724,7 +726,7 @@ impl Renderer {
         };
 
         let surface_attribs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-            window.raw_window_handle(),
+            window.window_handle()?.as_raw(),
             NonZeroU32::new(viewport.size[0] as u32).unwrap(),
             NonZeroU32::new(viewport.size[1] as u32).unwrap(),
         );
@@ -845,18 +847,12 @@ impl Renderer {
             for list in draw_data.draw_lists() {
                 glow.buffer_data_u8_slice(
                     glow::ARRAY_BUFFER,
-                    slice::from_raw_parts(
-                        list.vtx_buffer().as_ptr().cast(),
-                        list.vtx_buffer().len() * 20,
-                    ),
+                    to_byte_slice(list.vtx_buffer()),
                     glow::STREAM_DRAW,
                 );
                 glow.buffer_data_u8_slice(
                     glow::ELEMENT_ARRAY_BUFFER,
-                    slice::from_raw_parts(
-                        list.idx_buffer().as_ptr().cast(),
-                        list.idx_buffer().len() * 2,
-                    ),
+                    to_byte_slice(list.idx_buffer()),
                     glow::STREAM_DRAW,
                 );
 
@@ -1141,4 +1137,8 @@ fn to_imgui_mouse_button(button: winit::event::MouseButton) -> Option<MouseButto
         winit::event::MouseButton::Other(4) => Some(imgui::MouseButton::Extra2),
         _ => None,
     }
+}
+
+unsafe fn to_byte_slice<T>(slice: &[T]) -> &[u8] {
+    std::slice::from_raw_parts(slice.as_ptr().cast(), std::mem::size_of_val(slice))
 }
