@@ -1,6 +1,6 @@
 [package]
 name = "imgui-winit-glow-renderer-viewports"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2021"
 description = "combined platform + renderer using the docking branch viewport feature"
 homepage = "https://github.com/imgui-rs/imgui-rs"
