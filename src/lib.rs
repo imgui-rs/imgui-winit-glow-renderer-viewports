@@ -399,6 +399,7 @@ impl Renderer {
                 work_pos: [monitor.position().x as f32, monitor.position().y as f32],
                 work_size: [monitor.size().width as f32, monitor.size().height as f32],
                 dpi_scale: 1.0,
+                platform_handle: std::ptr::null_mut(),
             });
         }
         imgui
@@ -525,14 +526,24 @@ impl Renderer {
 
                     imgui
                         .io_mut()
-                        .add_key_event(Key::ModShift, state.shift_key());
+                        .add_key_event(Key::LeftShift, state.shift_key());
                     imgui
                         .io_mut()
-                        .add_key_event(Key::ModCtrl, state.control_key());
-                    imgui.io_mut().add_key_event(Key::ModAlt, state.alt_key());
+                        .add_key_event(Key::RightShift, state.shift_key());
                     imgui
                         .io_mut()
-                        .add_key_event(Key::ModSuper, state.super_key());
+                        .add_key_event(Key::LeftCtrl, state.control_key());
+                    imgui
+                        .io_mut()
+                        .add_key_event(Key::RightCtrl, state.control_key());
+                    imgui.io_mut().add_key_event(Key::LeftAlt, state.alt_key());
+                    imgui.io_mut().add_key_event(Key::RightAlt, state.alt_key());
+                    imgui
+                        .io_mut()
+                        .add_key_event(Key::LeftSuper, state.super_key());
+                    imgui
+                        .io_mut()
+                        .add_key_event(Key::RightSuper, state.super_key());
                 }
                 winit::event::WindowEvent::CursorMoved { position, .. } => {
                     if imgui
@@ -898,10 +909,22 @@ struct PlatformBackend {
 
 fn handle_key_modifier(io: &mut Io, key: &WinitKey, down: bool) {
     match key {
-        WinitKey::Named(NamedKey::Shift) => io.add_key_event(imgui::Key::ModShift, down),
-        WinitKey::Named(NamedKey::Control) => io.add_key_event(imgui::Key::ModCtrl, down),
-        WinitKey::Named(NamedKey::Alt) => io.add_key_event(imgui::Key::ModAlt, down),
-        WinitKey::Named(NamedKey::Super) => io.add_key_event(imgui::Key::ModSuper, down),
+        WinitKey::Named(NamedKey::Shift) => {
+            io.add_key_event(imgui::Key::LeftShift, down);
+            io.add_key_event(imgui::Key::RightShift, down);
+        }
+        WinitKey::Named(NamedKey::Control) => {
+            io.add_key_event(imgui::Key::LeftCtrl, down);
+            io.add_key_event(imgui::Key::RightCtrl, down);
+        }
+        WinitKey::Named(NamedKey::Alt) => {
+            io.add_key_event(imgui::Key::LeftAlt, down);
+            io.add_key_event(imgui::Key::RightAlt, down);
+        }
+        WinitKey::Named(NamedKey::Super) => {
+            io.add_key_event(imgui::Key::LeftSuper, down);
+            io.add_key_event(imgui::Key::RightSuper, down);
+        }
         _ => {}
     }
 }
