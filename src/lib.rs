@@ -498,9 +498,11 @@ impl Renderer {
                     (*(viewport.platform_user_data.cast::<ViewportData>())).focus = f;
                 },
                 winit::event::WindowEvent::KeyboardInput { ref event, .. } => {
-                    if let Some(txt) = &event.text {
-                        for ch in txt.chars() {
-                            imgui.io_mut().add_input_character(ch);
+                    if event.state.is_pressed() {
+                        if let Some(txt) = &event.text {
+                            for ch in txt.chars() {
+                                imgui.io_mut().add_input_character(ch);
+                            }
                         }
                     }
 
